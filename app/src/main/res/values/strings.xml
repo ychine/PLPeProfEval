@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BMS Professor Evaluation</string>
+    <string name="university_name">Pamantasan ng Lungsod ng Pasig</string>
+    <string name="loading_message">Loading application...</string>
+    <string name="copyright_text">© 2025 PLP. All rights reserved.</string>
+    <string name="plplogo">University Logo</string>
+
+    <!-- Roles -->
+    <string-array name="role_array">
+        <item>student</item>
+        <item>professor</item>
+        <item>admin</item>
+    </string-array>
+
+    <!-- Login and Registration -->
+    <string name="hint_email">Email Address</string>
+    <string name="hint_password">Password</string>
+    <string name="hint_name">Full Name</string>
+    <string name="hint_department">Department</string>
+    <string name="button_login">Login</string>
+    <string name="button_register">Register</string>
+    <string name="text_no_account">Don't have an account? Register here</string>
+    <string name="text_has_account">Already have an account? Login here</string>
+
+    <!-- Dashboard -->
+    <string name="title_student_dashboard">Student Dashboard</string>
+    <string name="title_professor_dashboard">Professor Dashboard</string>
+    <string name="title_admin_dashboard">Admin Dashboard</string>
+    <string name="text_welcome">Welcome</string>
+    <string name="text_no_courses">No courses available at the moment</string>
+    <string name="action_logout">Logout</string>
+
+    <!-- Evaluation -->
+    <string name="title_evaluation">Professor Evaluation</string>
+    <string name="hint_comments">Additional comments</string>
+    <string name="button_submit">Submit Evaluation</string>
+    <string name="text_evaluation_success">Evaluation submitted successfully</string>
+</resources>
