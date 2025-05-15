@@ -24,6 +24,7 @@ public class Professor extends User {
         receivedEvaluations = new ArrayList<>();
     }
 
+
     // Getters and Setters
     public String getProfessorId() {
         return professorId;
@@ -80,6 +81,11 @@ public class Professor extends User {
         evaluation.setStudentId("anonymous");
         receivedEvaluations.add(evaluation);
     }
+
+    public Professor(String professorId) {
+        this.professorId = professorId;
+    }
+
 
     // Calculate average rating across all evaluations
     public double getAverageRating() {

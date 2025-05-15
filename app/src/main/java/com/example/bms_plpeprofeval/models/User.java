@@ -7,6 +7,7 @@ public class User implements Serializable {
     private String email;
     private String password;
     private String fullName;
+    private String department;
     private String userType;
     private String dateCreated;
     private boolean isActive;
@@ -22,6 +23,7 @@ public class User implements Serializable {
         this.password = password;
         this.fullName = fullName;
         this.userType = userType;
+        this.department = department;
         this.isActive = true;
     }
 
@@ -80,5 +82,13 @@ public class User implements Serializable {
 
     public void setActive(boolean active) {
         isActive = active;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
     }
 }

@@ -238,7 +238,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put(KEY_USER_TYPE, user.getUserType());
             values.put(KEY_EMAIL, user.getEmail());
             values.put(KEY_PASSWORD, user.getPassword());
-            values.put(KEY_NAME, user.getName());
+            values.put(KEY_NAME, user.getFullName());
             values.put(KEY_DEPARTMENT, user.getDepartment());
 
             result = db.insert(TABLE_USERS, null, values);
@@ -397,8 +397,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put(KEY_COURSE_ID, course.getCourseId());
             values.put(KEY_COURSE_CODE, course.getCourseCode());
             values.put(KEY_COURSE_NAME, course.getCourseName());
-            values.put(KEY_SEMESTER, course.getSemester());
-            values.put(KEY_PROFESSOR_ID, course.getProfessorId());
+
+            // Handle semester (taking first semester from list)
+            if (course.getSemesterOffered() != null && !course.getSemesterOffered().isEmpty()) {
+                try {
+                    int semesterInt = Integer.parseInt(course.getSemesterOffered().get(0));
+                    values.put(KEY_SEMESTER, semesterInt);
+                } catch (NumberFormatException e) {
+                    values.putNull(KEY_SEMESTER);
+                }
+            } else {
+                values.putNull(KEY_SEMESTER);
+            }
+
+            // Handle professor (taking first professor from list)
+            if (course.getProfessors() != null && !course.getProfessors().isEmpty()) {
+                values.put(KEY_PROFESSOR_ID, course.getProfessors().get(0).getUserId());
+            } else {
+                values.putNull(KEY_PROFESSOR_ID);
+            }
+
+            // Academic Year
             values.put(KEY_ACADEMIC_YEAR, course.getAcademicYear());
 
             result = db.insert(TABLE_COURSES, null, values);
@@ -408,6 +427,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
         return result;
     }
+
 
     // Get all courses
     public List<Course> getAllCourses() {
@@ -501,7 +521,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
                     boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
 
-                    EssayQuestion question = new EssayQuestion(questionId, questionText, isActive);
+                    EssayQuestion question = new EssayQuestion("Q1", "Explain...", 1);
+
                     questions.add(question);
                 } while (cursor.moveToNext());
             }
@@ -535,7 +556,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
                     boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
 
-                    RatingQuestion question = new RatingQuestion(questionId, questionText, isActive);
+                    RatingQuestion question = new RatingQuestion("q1", "How do you rate?", 1);
                     questions.add(question);
                 } while (cursor.moveToNext());
             }

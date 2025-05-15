@@ -9,6 +9,7 @@ public class Course implements Serializable {
     private String courseCode;
     private String courseName;
     private String description;
+    private String academicYear;
     private String department;
     private int creditHours;
     private List<Professor> professors;
@@ -21,13 +22,22 @@ public class Course implements Serializable {
         isActive = true;
     }
 
-    public Course(String courseId, String courseCode, String courseName) {
+    public Course(String courseId, String courseCode, String courseName,
+                  int semester, String professorId, String academicYear) {
         this.courseId = courseId;
         this.courseCode = courseCode;
         this.courseName = courseName;
-        professors = new ArrayList<>();
-        semesterOffered = new ArrayList<>();
-        isActive = true;
+        // If you want, you can add fields for semester, professorId, academicYear to your class,
+        // or store these values somewhere else (like in the semesterOffered list or professors list)
+        this.semesterOffered = new ArrayList<>();
+        this.semesterOffered.add(String.valueOf(semester));
+
+        this.professors = new ArrayList<>();
+        if (professorId != null) {
+            this.professors.add(new Professor(professorId)); // assuming Professor has constructor taking userId
+        }
+
+        this.academicYear = academicYear; // You would need to add this field and getter/setter in Course class
     }
 
     // Getters and Setters
@@ -108,6 +118,15 @@ public class Course implements Serializable {
         }
         semesterOffered.add(semesterId);
     }
+
+    public String getAcademicYear() {
+        return academicYear;
+    }
+
+    public void setAcademicYear(String academicYear) {
+        this.academicYear = academicYear;
+    }
+
 
     public boolean isActive() {
         return isActive;

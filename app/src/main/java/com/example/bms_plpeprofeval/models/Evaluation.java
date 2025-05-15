@@ -15,19 +15,22 @@ public class Evaluation implements Serializable {
     private List<RatingAnswer> ratingAnswers;
     private String additionalComments; // Optional overall comments
     private boolean isAnonymized; // Whether student info has been removed for professor viewing
+    private boolean completed;
 
     public Evaluation() {
         essayAnswers = new ArrayList<>();
         ratingAnswers = new ArrayList<>();
         isAnonymized = false;
+        completed = false;
     }
 
-    public Evaluation(String evaluationId, String courseId, String professorId, String studentId, String semesterId) {
+    public Evaluation(String evaluationId, String courseId, String professorId, String studentId, String semesterId, boolean completed) {
         this.evaluationId = evaluationId;
         this.courseId = courseId;
         this.professorId = professorId;
         this.studentId = studentId;
         this.semesterId = semesterId;
+        this.completed = completed;  // Assuming you added a boolean field called completed
         essayAnswers = new ArrayList<>();
         ratingAnswers = new ArrayList<>();
         isAnonymized = false;
@@ -158,4 +161,13 @@ public class Evaluation implements Serializable {
 
         return total / ratingAnswers.size();
     }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
+    }
+
 }
