@@ -18,8 +18,15 @@ import com.example.bms_plpeprofeval.models.User;
 import com.example.bms_plpeprofeval.utils.Constants;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * Database helper class for the BMS Professor Evaluation application.
+ * Handles all database operations including CRUD operations for users, courses,
+ * questions, evaluations, and responses.
+ */
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "DatabaseHelper";
 
@@ -71,6 +78,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_RESPONSE_ID = "response_id";
     private static final String KEY_RESPONSE = "response";
     private static final String KEY_RATING = "rating";
+
+    // Cache for frequently accessed data
+    private Map<String, Professor> professorCache = new HashMap<>();
+    private Map<String, Course> courseCache = new HashMap<>();
 
     // Create Table Statements
     private static final String CREATE_TABLE_USERS = "CREATE TABLE " + TABLE_USERS + "("
@@ -138,7 +149,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     // Singleton instance
     private static DatabaseHelper sInstance;
 
-    // Get singleton instance
+    /**
+     * Get singleton instance of DatabaseHelper
+     *
+     * @param context Application context
+     * @return DatabaseHelper instance
+     */
     public static synchronized DatabaseHelper getInstance(Context context) {
         if (sInstance == null) {
             sInstance = new DatabaseHelper(context.getApplicationContext());
@@ -190,7 +206,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    // Helper method to insert default questions
+    /**
+     * Helper method to insert default questions
+     */
     private void insertDefaultQuestions(SQLiteDatabase db) {
         // Default rating questions
         String[] ratingQuestions = {
@@ -227,7 +245,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // USER METHODS
 
-    // Add a new user
+    /**
+     * Add a new user to the database
+     *
+     * @param user User object to add
+     * @return Row ID of inserted user, or -1 if error
+     */
     public long addUser(User user) {
         SQLiteDatabase db = getWritableDatabase();
         long result = -1;
@@ -249,7 +272,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return result;
     }
 
-    // Get user by email and password (login)
+    /**
+     * Get user by email and password (for login)
+     *
+     * @param email    User email
+     * @param password User password
+     * @return User object if found, null otherwise
+     */
     public User getUserByCredentials(String email, String password) {
         SQLiteDatabase db = getReadableDatabase();
         User user = null;
@@ -289,7 +318,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return user;
     }
 
-    // Check if email exists
+    /**
+     * Check if email exists in database
+     *
+     * @param email Email to check
+     * @return true if email exists, false otherwise
+     */
     public boolean isEmailExists(String email) {
         SQLiteDatabase db = getReadableDatabase();
 
@@ -313,7 +347,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return exists;
     }
 
-    // Get all professors
+    /**
+     * Get all professors from database
+     *
+     * @return List of Professor objects
+     */
     public List<Professor> getAllProfessors() {
         List<Professor> professors = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -336,6 +374,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
                     Professor professor = new Professor(userId, email, password, name, department);
                     professors.add(professor);
+
+                    // Cache the professor
+                    professorCache.put(userId, professor);
                 } while (cursor.moveToNext());
             }
         } catch (Exception e) {
@@ -349,7 +390,60 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return professors;
     }
 
-    // Get all students
+    /**
+     * Get professor by ID
+     *
+     * @param professorId Professor ID
+     * @return Professor object if found, null otherwise
+     */
+    public Professor getProfessorById(String professorId) {
+        if (professorId == null) {
+            return null;
+        }
+
+        // Check cache first
+        if (professorCache.containsKey(professorId)) {
+            return professorCache.get(professorId);
+        }
+
+        SQLiteDatabase db = getReadableDatabase();
+        Professor professor = null;
+
+        String query = "SELECT * FROM " + TABLE_USERS +
+                " WHERE " + KEY_USER_ID + " = ? AND " + KEY_USER_TYPE + " = ?";
+
+        Cursor cursor = null;
+
+        try {
+            cursor = db.rawQuery(query, new String[]{professorId, Constants.USER_TYPE_PROFESSOR});
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String email = cursor.getString(cursor.getColumnIndexOrThrow(KEY_EMAIL));
+                String password = cursor.getString(cursor.getColumnIndexOrThrow(KEY_PASSWORD));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME));
+                String department = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DEPARTMENT));
+
+                professor = new Professor(professorId, email, password, name, department);
+
+                // Cache for future use
+                professorCache.put(professorId, professor);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting professor by ID: " + e.getMessage());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return professor;
+    }
+
+    /**
+     * Get all students from database
+     *
+     * @return List of Student objects
+     */
     public List<Student> getAllStudents() {
         List<Student> students = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -387,7 +481,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // COURSE METHODS
 
-    // Add a new course
+    /**
+     * Add a new course to the database
+     *
+     * @param course Course object to add
+     * @return Row ID of inserted course, or -1 if error
+     */
     public long addCourse(Course course) {
         SQLiteDatabase db = getWritableDatabase();
         long result = -1;
@@ -421,6 +520,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put(KEY_ACADEMIC_YEAR, course.getAcademicYear());
 
             result = db.insert(TABLE_COURSES, null, values);
+
+            // Add to cache if successful
+            if (result != -1) {
+                courseCache.put(course.getCourseId(), course);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error adding course: " + e.getMessage());
         }
@@ -428,8 +532,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return result;
     }
 
-
-    // Get all courses
+    /**
+     * Get all courses from database
+     *
+     * @return List of Course objects
+     */
     public List<Course> getAllCourses() {
         List<Course> courses = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -451,6 +558,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
                     Course course = new Course(courseId, courseCode, courseName, semester, professorId, academicYear);
                     courses.add(course);
+
+                    // Cache the course
+                    courseCache.put(courseId, course);
                 } while (cursor.moveToNext());
             }
         } catch (Exception e) {
@@ -464,7 +574,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return courses;
     }
 
-    // Get courses by professor
+    /**
+     * Get courses by professor ID
+     *
+     * @param professorId Professor ID
+     * @return List of Course objects assigned to professor
+     */
     public List<Course> getCoursesByProfessor(String professorId) {
         List<Course> courses = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -487,6 +602,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
                     Course course = new Course(courseId, courseCode, courseName, semester, professorId, academicYear);
                     courses.add(course);
+
+                    // Cache the course
+                    courseCache.put(courseId, course);
                 } while (cursor.moveToNext());
             }
         } catch (Exception e) {
@@ -500,450 +618,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return courses;
     }
 
-    // QUESTION METHODS
-
-    // Get all active essay questions
-    public List<EssayQuestion> getAllActiveEssayQuestions() {
-        List<EssayQuestion> questions = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-
-        String query = "SELECT * FROM " + TABLE_ESSAY_QUESTIONS +
-                " WHERE " + KEY_IS_ACTIVE + " = 1";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, null);
-
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    String questionId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_ID));
-                    String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
-                    boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
-
-                    EssayQuestion question = new EssayQuestion("Q1", "Explain...", 1);
-
-                    questions.add(question);
-                } while (cursor.moveToNext());
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting active essay questions: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return questions;
-    }
-
-    // Get all active rating questions
-    public List<RatingQuestion> getAllActiveRatingQuestions() {
-        List<RatingQuestion> questions = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-
-        String query = "SELECT * FROM " + TABLE_RATING_QUESTIONS +
-                " WHERE " + KEY_IS_ACTIVE + " = 1";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, null);
-
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    String questionId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_ID));
-                    String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
-                    boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
-
-                    RatingQuestion question = new RatingQuestion("q1", "How do you rate?", 1);
-                    questions.add(question);
-                } while (cursor.moveToNext());
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting active rating questions: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return questions;
-    }
-
-    // Add a new essay question
-    public long addEssayQuestion(EssayQuestion question) {
-        SQLiteDatabase db = getWritableDatabase();
-        long result = -1;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_QUESTION_ID, question.getQuestionId());
-            values.put(KEY_QUESTION_TEXT, question.getQuestionText());
-            values.put(KEY_IS_ACTIVE, question.isActive() ? 1 : 0);
-
-            result = db.insert(TABLE_ESSAY_QUESTIONS, null, values);
-        } catch (Exception e) {
-            Log.e(TAG, "Error adding essay question: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Add a new rating question
-    public long addRatingQuestion(RatingQuestion question) {
-        SQLiteDatabase db = getWritableDatabase();
-        long result = -1;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_QUESTION_ID, question.getQuestionId());
-            values.put(KEY_QUESTION_TEXT, question.getQuestionText());
-            values.put(KEY_IS_ACTIVE, question.isActive() ? 1 : 0);
-
-            result = db.insert(TABLE_RATING_QUESTIONS, null, values);
-        } catch (Exception e) {
-            Log.e(TAG, "Error adding rating question: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Update essay question
-    public int updateEssayQuestion(EssayQuestion question) {
-        SQLiteDatabase db = getWritableDatabase();
-        int result = 0;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_QUESTION_TEXT, question.getQuestionText());
-            values.put(KEY_IS_ACTIVE, question.isActive() ? 1 : 0);
-
-            result = db.update(TABLE_ESSAY_QUESTIONS, values,
-                    KEY_QUESTION_ID + " = ?",
-                    new String[]{question.getQuestionId()});
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating essay question: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Update rating question
-    public int updateRatingQuestion(RatingQuestion question) {
-        SQLiteDatabase db = getWritableDatabase();
-        int result = 0;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_QUESTION_TEXT, question.getQuestionText());
-            values.put(KEY_IS_ACTIVE, question.isActive() ? 1 : 0);
-
-            result = db.update(TABLE_RATING_QUESTIONS, values,
-                    KEY_QUESTION_ID + " = ?",
-                    new String[]{question.getQuestionId()});
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating rating question: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // EVALUATION METHODS
-
-    // Add a new evaluation
-    public long createEvaluation(Evaluation evaluation) {
-        SQLiteDatabase db = getWritableDatabase();
-        long result = -1;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_EVALUATION_ID, evaluation.getEvaluationId());
-            values.put(KEY_STUDENT_ID, evaluation.getStudentId());
-            values.put(KEY_PROFESSOR_ID, evaluation.getProfessorId());
-            values.put(KEY_COURSE_ID, evaluation.getCourseId());
-            values.put(KEY_SUBMISSION_DATE, evaluation.getSubmissionDate());
-            values.put(KEY_IS_COMPLETED, evaluation.isCompleted() ? 1 : 0);
-
-            result = db.insert(TABLE_EVALUATIONS, null, values);
-        } catch (Exception e) {
-            Log.e(TAG, "Error creating evaluation: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Save essay response
-    public long saveEssayResponse(String responseId, String evaluationId, String questionId, String response) {
-        SQLiteDatabase db = getWritableDatabase();
-        long result = -1;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_RESPONSE_ID, responseId);
-            values.put(KEY_EVALUATION_ID, evaluationId);
-            values.put(KEY_QUESTION_ID, questionId);
-            values.put(KEY_RESPONSE, response);
-
-            result = db.insert(TABLE_ESSAY_RESPONSES, null, values);
-        } catch (Exception e) {
-            Log.e(TAG, "Error saving essay response: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Save rating response
-    public long saveRatingResponse(String responseId, String evaluationId, String questionId, int rating) {
-        SQLiteDatabase db = getWritableDatabase();
-        long result = -1;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_RESPONSE_ID, responseId);
-            values.put(KEY_EVALUATION_ID, evaluationId);
-            values.put(KEY_QUESTION_ID, questionId);
-            values.put(KEY_RATING, rating);
-
-            result = db.insert(TABLE_RATING_RESPONSES, null, values);
-        } catch (Exception e) {
-            Log.e(TAG, "Error saving rating response: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Complete evaluation
-    public int completeEvaluation(String evaluationId, String submissionDate) {
-        SQLiteDatabase db = getWritableDatabase();
-        int result = 0;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(KEY_SUBMISSION_DATE, submissionDate);
-            values.put(KEY_IS_COMPLETED, 1);
-
-            result = db.update(TABLE_EVALUATIONS, values,
-                    KEY_EVALUATION_ID + " = ?",
-                    new String[]{evaluationId});
-        } catch (Exception e) {
-            Log.e(TAG, "Error completing evaluation: " + e.getMessage());
-        }
-
-        return result;
-    }
-
-    // Get evaluations by student
-    public List<Evaluation> getEvaluationsByStudent(String studentId) {
-        List<Evaluation> evaluations = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-
-        String query = "SELECT * FROM " + TABLE_EVALUATIONS +
-                " WHERE " + KEY_STUDENT_ID + " = ?";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{studentId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    String evaluationId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_EVALUATION_ID));
-                    String professorId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_PROFESSOR_ID));
-                    String courseId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_COURSE_ID));
-                    String submissionDate = cursor.getString(cursor.getColumnIndexOrThrow(KEY_SUBMISSION_DATE));
-                    boolean isCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_COMPLETED)) == 1;
-
-                    Evaluation evaluation = new Evaluation(evaluationId, studentId, professorId, courseId, submissionDate, isCompleted);
-                    evaluations.add(evaluation);
-                } while (cursor.moveToNext());
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting evaluations by student: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return evaluations;
-    }
-
-    // Get evaluations by professor
-    public List<Evaluation> getEvaluationsByProfessor(String professorId) {
-        List<Evaluation> evaluations = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-
-        String query = "SELECT * FROM " + TABLE_EVALUATIONS +
-                " WHERE " + KEY_PROFESSOR_ID + " = ? AND " + KEY_IS_COMPLETED + " = 1";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{professorId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    String evaluationId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_EVALUATION_ID));
-                    String studentId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_STUDENT_ID));
-                    String courseId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_COURSE_ID));
-                    String submissionDate = cursor.getString(cursor.getColumnIndexOrThrow(KEY_SUBMISSION_DATE));
-                    boolean isCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_COMPLETED)) == 1;
-
-                    Evaluation evaluation = new Evaluation(evaluationId, studentId, professorId, courseId, submissionDate, isCompleted);
-                    evaluations.add(evaluation);
-                } while (cursor.moveToNext());
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting evaluations by professor: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return evaluations;
-    }
-
-    // Get evaluation results (for professor view)
-    public List<String> getEssayResponsesForEvaluation(String evaluationId) {
-        List<String> responses = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-
-        String query = "SELECT er." + KEY_RESPONSE + ", eq." + KEY_QUESTION_TEXT +
-                " FROM " + TABLE_ESSAY_RESPONSES + " er" +
-                " JOIN " + TABLE_ESSAY_QUESTIONS + " eq ON er." + KEY_QUESTION_ID + " = eq." + KEY_QUESTION_ID +
-                " WHERE er." + KEY_EVALUATION_ID + " = ?";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{evaluationId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
-                    String response = cursor.getString(cursor.getColumnIndexOrThrow(KEY_RESPONSE));
-
-                    responses.add(questionText + ": " + response);
-                } while (cursor.moveToNext());
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting essay responses: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return responses;
-    }
-
-    // Get rating averages for a professor
-    public float getAverageRatingForProfessor(String professorId, String questionId) {
-        SQLiteDatabase db = getReadableDatabase();
-        float average = 0;
-
-        String query = "SELECT AVG(rr." + KEY_RATING + ") AS average_rating" +
-                " FROM " + TABLE_RATING_RESPONSES + " rr" +
-                " JOIN " + TABLE_EVALUATIONS + " e ON rr." + KEY_EVALUATION_ID + " = e." + KEY_EVALUATION_ID +
-                " WHERE e." + KEY_PROFESSOR_ID + " = ? AND rr." + KEY_QUESTION_ID + " = ? AND e." + KEY_IS_COMPLETED + " = 1";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{professorId, questionId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                average = cursor.getFloat(cursor.getColumnIndexOrThrow("average_rating"));
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting average rating: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return average;
-    }
-
-    // Check if student has already evaluated a course/professor
-    public boolean hasStudentEvaluated(String studentId, String professorId, String courseId) {
-        SQLiteDatabase db = getReadableDatabase();
-        boolean hasEvaluated = false;
-
-        String query = "SELECT COUNT(*) AS count FROM " + TABLE_EVALUATIONS +
-                " WHERE " + KEY_STUDENT_ID + " = ? AND " +
-                KEY_PROFESSOR_ID + " = ? AND " +
-                KEY_COURSE_ID + " = ? AND " +
-                KEY_IS_COMPLETED + " = 1";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{studentId, professorId, courseId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                int count = cursor.getInt(cursor.getColumnIndexOrThrow("count"));
-                hasEvaluated = (count > 0);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error checking student evaluation: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return hasEvaluated;
-    }
-
-    // Get user by ID
-    public User getUserById(String userId) {
-        SQLiteDatabase db = getReadableDatabase();
-        User user = null;
-
-        String query = "SELECT * FROM " + TABLE_USERS +
-                " WHERE " + KEY_USER_ID + " = ?";
-
-        Cursor cursor = null;
-
-        try {
-            cursor = db.rawQuery(query, new String[]{userId});
-
-            if (cursor != null && cursor.moveToFirst()) {
-                String userType = cursor.getString(cursor.getColumnIndexOrThrow(KEY_USER_TYPE));
-                String email = cursor.getString(cursor.getColumnIndexOrThrow(KEY_EMAIL));
-                String password = cursor.getString(cursor.getColumnIndexOrThrow(KEY_PASSWORD));
-                String name = cursor.getString(cursor.getColumnIndexOrThrow(KEY_NAME));
-                String department = cursor.getString(cursor.getColumnIndexOrThrow(KEY_DEPARTMENT));
-
-                switch (userType) {
-                    case Constants.USER_TYPE_STUDENT:
-                        user = new Student(userId, email, password, name, department);
-                        break;
-                    case Constants.USER_TYPE_PROFESSOR:
-                        user = new Professor(userId, email, password, name, department);
-                        break;
-                    case Constants.USER_TYPE_ADMIN:
-                        user = new Admin(userId, email, password, name, department);
-                        break;
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting user by ID: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return user;
-    }
-
-    // Get course by ID
+    /**
+     * Get course by ID
+     *
+     * @param courseId Course ID
+     * @return Course object if found, null otherwise
+     */
     public Course getCourseById(String courseId) {
+        if (courseId == null) {
+            return null;
+        }
+
+        // Check cache first
+        if (courseCache.containsKey(courseId)) {
+            return courseCache.get(courseId);
+        }
+
         SQLiteDatabase db = getReadableDatabase();
         Course course = null;
 
@@ -963,6 +653,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 String academicYear = cursor.getString(cursor.getColumnIndexOrThrow(KEY_ACADEMIC_YEAR));
 
                 course = new Course(courseId, courseCode, courseName, semester, professorId, academicYear);
+
+                // Cache for future use
+                courseCache.put(courseId, course);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error getting course by ID: " + e.getMessage());
@@ -973,5 +666,184 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
 
         return course;
+    }
+
+    // QUESTION METHODS
+
+    /**
+     * Get all active essay questions
+     *
+     * @return List of EssayQuestion objects
+     */
+    public List<EssayQuestion> getAllActiveEssayQuestions() {
+        List<EssayQuestion> questions = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+
+        String query = "SELECT * FROM " + TABLE_ESSAY_QUESTIONS +
+                " WHERE " + KEY_IS_ACTIVE + " = 1";
+
+        Cursor cursor = null;
+
+        try {
+            cursor = db.rawQuery(query, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    String questionId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_ID));
+                    String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
+                    boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
+
+                    EssayQuestion question = new EssayQuestion(questionId, questionText, isActive ? 1 : 0);
+                    questions.add(question);
+                } while (cursor.moveToNext());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting active essay questions: " + e.getMessage());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return questions;
+    }
+
+    /**
+     * Get all active rating questions
+     *
+     * @return List of RatingQuestion objects
+     */
+    public List<RatingQuestion> getAllActiveRatingQuestions() {
+        List<RatingQuestion> questions = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+
+        String query = "SELECT * FROM " + TABLE_RATING_QUESTIONS +
+                " WHERE " + KEY_IS_ACTIVE + " = 1";
+
+        Cursor cursor = null;
+
+        try {
+            cursor = db.rawQuery(query, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    String questionId = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_ID));
+                    String questionText = cursor.getString(cursor.getColumnIndexOrThrow(KEY_QUESTION_TEXT));
+                    boolean isActive = cursor.getInt(cursor.getColumnIndexOrThrow(KEY_IS_ACTIVE)) == 1;
+
+                    RatingQuestion question = new RatingQuestion(questionId, questionText, isActive ? 1 : 0);
+                    questions.add(question);
+                } while (cursor.moveToNext());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting active rating questions: " + e.getMessage());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return questions;
+    }
+
+    /**
+     * Add a new rating question
+     *
+     * @param question RatingQuestion object to add
+     * @return Row ID of inserted question, or -1 if error
+     */
+    public long addRatingQuestion(RatingQuestion question) {
+        SQLiteDatabase db = getWritableDatabase();
+        long result = -1;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(KEY_QUESTION_ID, question.getQuestionId());
+            values.put(KEY_QUESTION_TEXT, question.getQuestionText());
+            values.put(KEY_IS_ACTIVE, question.isActive() ? 1 : 0);
+
+            result = db.insert(TABLE_RATING_QUESTIONS, null, values);
+        } catch (Exception e) {
+            Log.e(TAG, "Error adding rating question: " + e.getMessage());
+        } finally {
+            db.close();
+        }
+        return result;
+    }
+    public long addEvaluation(Evaluation evaluation) {
+        SQLiteDatabase db = getWritableDatabase();
+        long result = -1;
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(KEY_EVALUATION_ID, java.util.UUID.randomUUID().toString());
+            values.put(KEY_STUDENT_ID, evaluation.getStudentId());
+            values.put(KEY_PROFESSOR_ID, evaluation.getProfessorId());
+            values.put(KEY_COURSE_ID, evaluation.getCourseId());
+            values.put(KEY_SUBMISSION_DATE, evaluation.getEvaluationDate());
+            values.put(KEY_IS_COMPLETED, 1);
+
+            // Insert basic evaluation data
+            result = db.insert(TABLE_EVALUATIONS, null, values);
+
+            if (result != -1) {
+                String evaluationId = values.getAsString(KEY_EVALUATION_ID);
+
+                // Save the rating responses to the database
+                // We need to get the active rating questions first
+                List<RatingQuestion> ratingQuestions = getAllActiveRatingQuestions();
+                if (ratingQuestions.size() >= 4) {  // We have 4 rating categories in the UI
+                    // Map UI ratings to questions (assuming a specific order)
+                    // Teaching rating -> Question 1
+                    ContentValues ratingValues = new ContentValues();
+                    ratingValues.put(KEY_RESPONSE_ID, java.util.UUID.randomUUID().toString());
+                    ratingValues.put(KEY_EVALUATION_ID, evaluationId);
+                    ratingValues.put(KEY_QUESTION_ID, ratingQuestions.get(0).getQuestionId());
+                    ratingValues.put(KEY_RATING, Math.round(evaluation.getTeachingRating()));
+                    db.insert(TABLE_RATING_RESPONSES, null, ratingValues);
+
+                    // Communication rating -> Question 2
+                    ratingValues = new ContentValues();
+                    ratingValues.put(KEY_RESPONSE_ID, java.util.UUID.randomUUID().toString());
+                    ratingValues.put(KEY_EVALUATION_ID, evaluationId);
+                    ratingValues.put(KEY_QUESTION_ID, ratingQuestions.get(1).getQuestionId());
+                    ratingValues.put(KEY_RATING, Math.round(evaluation.getCommunicationRating()));
+                    db.insert(TABLE_RATING_RESPONSES, null, ratingValues);
+
+                    // Preparation rating -> Question 3
+                    ratingValues = new ContentValues();
+                    ratingValues.put(KEY_RESPONSE_ID, java.util.UUID.randomUUID().toString());
+                    ratingValues.put(KEY_EVALUATION_ID, evaluationId);
+                    ratingValues.put(KEY_QUESTION_ID, ratingQuestions.get(2).getQuestionId());
+                    ratingValues.put(KEY_RATING, Math.round(evaluation.getPreparationRating()));
+                    db.insert(TABLE_RATING_RESPONSES, null, ratingValues);
+
+                    // Knowledge rating -> Question 4
+                    ratingValues = new ContentValues();
+                    ratingValues.put(KEY_RESPONSE_ID, java.util.UUID.randomUUID().toString());
+                    ratingValues.put(KEY_EVALUATION_ID, evaluationId);
+                    ratingValues.put(KEY_QUESTION_ID, ratingQuestions.get(3).getQuestionId());
+                    ratingValues.put(KEY_RATING, Math.round(evaluation.getKnowledgeRating()));
+                    db.insert(TABLE_RATING_RESPONSES, null, ratingValues);
+                }
+
+                // Save the comment as an essay response if provided
+                if (evaluation.getComments() != null && !evaluation.getComments().isEmpty()) {
+                    List<EssayQuestion> essayQuestions = getAllActiveEssayQuestions();
+                    if (!essayQuestions.isEmpty()) {
+                        // Use the first essay question for comments
+                        ContentValues commentValues = new ContentValues();
+                        commentValues.put(KEY_RESPONSE_ID, java.util.UUID.randomUUID().toString());
+                        commentValues.put(KEY_EVALUATION_ID, evaluationId);
+                        commentValues.put(KEY_QUESTION_ID, essayQuestions.get(0).getQuestionId());
+                        commentValues.put(KEY_RESPONSE, evaluation.getComments());
+                        db.insert(TABLE_ESSAY_RESPONSES, null, commentValues);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error adding evaluation: " + e.getMessage());
+        }
+
+        return result;
     }
 }
